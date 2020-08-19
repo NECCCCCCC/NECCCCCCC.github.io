@@ -81,10 +81,23 @@
       <i class="blogfont">&#xe6c1;</i>
     </a>
   </div>
-  
+  <ol class="post__toc"><li class="post__toc-item post__toc-level-1"><a class="post__toc-link" href="#1-GNN%E4%B8%AD%E5%9B%BE%E5%8D%B7%E7%A7%AF%E5%B1%82%E7%9A%84%E7%AE%80%E5%8D%95%E5%AE%9E%E7%8E%B0"><span class="post__toc-text">1. GNN中图卷积层的简单实现</span></a></li><li class="post__toc-item post__toc-level-1"><a class="post__toc-link" href="#2-Self-attention%E7%9A%84%E5%9F%BA%E6%9C%AC%E5%BD%A2%E5%BC%8F"><span class="post__toc-text">2. Self-attention的基本形式</span></a></li><li class="post__toc-item post__toc-level-1"><a class="post__toc-link" href="#3-GNN%E4%B8%8ESelf-attention%E4%B9%8B%E9%97%B4%E7%9A%84%E8%81%94%E7%B3%BB"><span class="post__toc-text">3. GNN与Self-attention之间的联系</span></a></li></ol>
 </aside>
   <div class="post__content" itemprop="articleBody">
-    <p>Transformer是目前最为流行的机器翻译模型，其主要思想为利用Attention机制构建Encoder和Decoder，其中的Encoder模块更是被用于之后诸多语言模型之中，例如BERT和GPT。Transformer中的Attention机制主要包含self-attention和multi-head attention，其中前者为模型的核心部分。</p>
+    <p>Transformer是目前最为流行的机器翻译模型，其主要思想为利用Attention机制构建Encoder和Decoder，其中的Encoder模块更是被用于之后诸多语言模型之中，例如BERT和GPT。Transformer中的Attention机制主要包含Self-attention和Multi-head attention，前者为模型的核心部分，而后者更接近于trick。如何理解Self-attention困扰了我很久，直到上个月我重温论文的时候，我发现Self-attention本质上与GNN有着非常紧密的联系。之后，我在网上查阅到了相关的文章：<a target="_blank" rel="noopener" href="https://graphdeeplearning.github.io/post/transformers-are-gnns/">Transformers are Graph Neural Networks</a>，文章详细介绍了Transformer和GNN的部分基础知识，并简要介绍了两者间的联系，但对一些技术细节没有展开讲，我在此做简单的补充。如果大家对这两种网络不甚了解，推荐先阅读上面介绍的文章。</p>
+<h1 id="1-GNN中图卷积层的简单实现"><a href="#1-GNN中图卷积层的简单实现" class="headerlink" title="1. GNN中图卷积层的简单实现"></a>1. GNN中图卷积层的简单实现</h1><p>GNN（Graph Neural Network）也被称为GCN（Graph Convolutional Neural Network），其输入为预定义的图以及图中各个节点和边的初始特征（由于边特征与本文的主题相关性不大，为了方便讨论，下文中忽略边特征），每个节点都会通过图融合其相邻节点的特征。GNN通常包含多个图卷积层，每一层都以图和节点特征为输入，同时输出新的节点特征。在网络的最后通常会用max、mean或其它函数聚合节点的特征作为整张图的特征。如果该网络是用于解决分类问题，最后还会在每个节点或图的输出后再接上一层MLP用于输出类标。</p>
+<p>为了方便大家理解图网络，我们用尽量简单的形式来表示一层图卷积的过程。首先，GNN中通常用邻接矩阵（Adjacency Matrix）的形式来表示图，与数据结构中的概念是一致的，我们将其表示为$ \boldsymbol{A} =[a_{ij}]^{N \times N}$，其中$N$为节点的数量，$a_{ij}$表示图中第$i$个节点和第$j$个节点的关系：如果两个节点相邻，则$a_{ij}=1$；否则，$a_{ij}=0$。当然，仅用0和1来表示节点间的关系有时会损失一些信息，因为许多数据中并不是天然存在图的结构，而是通过某种方式构建的图。因此，为了让邻接矩阵保留更多的信息，我们将$a_{ij}$的取值范围扩大到$(0, +\infty )$，两个节点之间越相关，它们的$a_{ij}$越大；反之，则越接近于0。</p>
+<p>然后，第$i$个节点的初始特征向量可以表示为$ \boldsymbol{x}_i^k =[x_1,x_2, \ldots ,x_m]$，其中$m$为向量的长度，$k$表示当前处于第$k$个图卷积层中。则第$k+1$层的节点特征可以通过下式更新：</p>
+<script type="math/tex; mode=display">\boldsymbol{x}_i^{k+1} = \sum^{N}_{j=0}{ a_{ij} \boldsymbol{x}_j^k } \boldsymbol{W}  \tag{1} \label{eq1}</script><p>其中，$ \boldsymbol{W} $是大小为$m \times m$的待学习参数矩阵。通过$ \eqref{eq1} $我们可以观察到每个节点都会受到所有节点的影响，并且越是邻近的节点影响越大。图卷积的这一特点与传统CNN的卷积是非常相似的，唯一的区别在于CNN中每个节点的邻居节点是固定的，而GNN中每个节点的邻域则由邻接矩阵指定。为了帮助大家理解GNN与Transformer间的联系，$ \eqref{eq1} $可以转换为更简洁的矩阵相乘形式：</p>
+<script type="math/tex; mode=display">\boldsymbol{X}^{k+1} = \boldsymbol{A} \boldsymbol{X}^k \boldsymbol{W} \tag{2} \label{eq2}</script><p>其中$ \boldsymbol{X} = [ \boldsymbol{x}_1, \boldsymbol{x}_2, \ldots , \boldsymbol{x}_N ]^T $。这个简洁优雅的式子就是图卷积最基本的形式，也是我们下文讨论的基础之一。</p>
+<h1 id="2-Self-attention的基本形式"><a href="#2-Self-attention的基本形式" class="headerlink" title="2. Self-attention的基本形式"></a>2. Self-attention的基本形式</h1><p>Transformer中Self-attention的实现形式为Scaled dot-product attention，其计算公式为：</p>
+<script type="math/tex; mode=display">Attention( \boldsymbol{Q} , \boldsymbol{K} ,\boldsymbol{V} )=softmax( \frac{\boldsymbol{Q} \boldsymbol{K}^T }{\sqrt{d_k} } ) \boldsymbol{V} \tag{3} \label{eq3}</script><p>在Encoder部分中$ \boldsymbol{Q} = \boldsymbol{K} = \boldsymbol{V} = \boldsymbol{X} $，而$ \boldsymbol{X} $是大小为$l \times c$的特征矩阵，$l$为文本的长度，$c$为词向量的长度。因此，$ \eqref{eq3} $可以转换为下式：</p>
+<script type="math/tex; mode=display">Attention( \boldsymbol{X} )=softmax( \frac{\boldsymbol{X} \boldsymbol{X}^T }{\sqrt{d_k} } ) \boldsymbol{X} \tag{4} \label{eq4}</script><h1 id="3-GNN与Self-attention之间的联系"><a href="#3-GNN与Self-attention之间的联系" class="headerlink" title="3. GNN与Self-attention之间的联系"></a>3. GNN与Self-attention之间的联系</h1><p>现在，我们可以开始探讨$ \eqref{eq2} $与 $ \eqref{eq4} $间千丝万缕的联系。首先，两个式子中都包含形式相同的特征矩阵$ \boldsymbol{X} $，如果再忽略掉前者的参数矩阵$ \boldsymbol{W} $，两者之间的差异就仅剩邻接矩阵$ \boldsymbol{A} $与$ \boldsymbol{D} =softmax( \frac{\boldsymbol{X} \boldsymbol{X}^T }{\sqrt{d_k} } )$。让我们回忆下邻接矩阵的特点：所有元素非负的对称矩阵，显然$ \boldsymbol{D} $是满足这个要求的。因此，$ \boldsymbol{D} $至少在形式上是可以作为一个邻接矩阵的，但仅限于此的解释并不具有说服力，我们需要进一步分析$ \boldsymbol{D} $的含义。</p>
+<p>$\boldsymbol{X} \boldsymbol{X}^T$是$ \boldsymbol{D} $中最核心的部分，剩下的部分不过是对前者的一种规范化。而这个操作的结果矩阵包含了所有特征向量(在Transformer中是词向量，而在GNN中是节点特征向量)两两之间的点积。如果大家还记得余弦相似度的计算公式，应该就能理解向量之间的点积反映了两者之间的相似性。此处，我们给出一组向量$ \boldsymbol{V}=[ \boldsymbol{v}_1 , \boldsymbol{v}_2, \ldots , \boldsymbol{v}_n ]^T $基于余弦相似度构建邻接矩阵的计算公式：</p>
+<script type="math/tex; mode=display">\boldsymbol{A}_{\boldsymbol{V}} = \frac{ \boldsymbol{X} \boldsymbol{X}^T }{\boldsymbol{u}^T \boldsymbol{u}} \tag{5} \label{eq5}</script><p>其中$ \boldsymbol{u}=[| \boldsymbol{v}_1 |, | \boldsymbol{v}_2 |, \ldots, | \boldsymbol{v}_n |] $。可以看出$ \boldsymbol{A}_{\boldsymbol{V}} $的形式与$ \boldsymbol{D} $几乎一样，唯一的不同在于规范化的方式。至此，我们可以说$ \boldsymbol{D} $就是一个邻接矩阵，而Scaled dot-product attention实质上即为图卷积的过程。</p>
+<p>最后，我们再谈谈Self-attention与传统图卷积的区别:</p>
+<p>1.在大部分的GNN中，图都是预先构建的，不会在训练的过程中发生变化，而Self-attention中的图是学习出来的;<br>2.在大部分的GNN中，更新节点特征依赖参数矩阵$ \boldsymbol{W} $，而Self-attention中则是直接对特征向量进行优化。</p>
+<p>当然，现在有越来越多GNN的工作开始尝试在训练过程中学习一个更好的图（在原始图的基础上）以及新的节点特征更新方式，而Transformer可以为GNN的研究提供一个新的视角，反之亦然。</p>
 
   </div>
   
@@ -126,5 +139,21 @@ new Valine({
 
 <script src="/scripts/main.js"></script>
 
-  </body>
+  <script type="text/x-mathjax-config">
+    MathJax.Hub.Config({
+        tex2jax: {
+            inlineMath: [ ["$","$"], ["\\(","\\)"] ],
+            skipTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'],
+            processEscapes: true
+        }
+    });
+    MathJax.Hub.Queue(function() {
+        var all = MathJax.Hub.getAllJax();
+        for (var i = 0; i < all.length; ++i)
+            all[i].SourceElement().parentNode.className += ' has-jax';
+    });
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.1/MathJax.js?config=TeX-MML-AM_CHTML"></script>
+
+</body>
 </html>
