@@ -86,7 +86,6 @@
   <div class="post__content" itemprop="articleBody">
     <p>最近看了一些Contrastive learning相关的论文，自己也在做相关的课题，发现许多论文在使用交叉熵损失函数时，会使用如下形式的Softmax函数：</p>
 <script type="math/tex; mode=display">q_i = \frac{exp(z_i/T)}{\sum_j{exp(z_j/T)}} \tag{1} \label{eq1}</script><p>与我们熟悉的Softmax函数的不同之处在于多了一个被称为温度 (temperature) 的超参数$T$，而$T$的作用一度令我感到困惑。后来我google了下，又查阅了相关论文，得到了一个准确的答案：较大的$T$可以让最终的输出概率Softer，其中Softer指的是让最终输出的各类别之间的预测概率更接近。举个例子：对于一个二分类问题，原输出概率为(0.1, 0.9)，当$T$增大后，可能变为(0.2, 0.8)。其实这个结论是显然的，因为每个类别对应的概率分母$ \sum_j{exp(z_j/T)} $都是相同的，而分子中，$T$增大会磨平$ z_i $之间的差异。最极端的情况下，当$T$趋于无穷大时，所有概率都趋向于$ 1/K $，其中$K$为类别数。</p>
-<p>由于结论过于显然，这里就不做证明了，直接给个证明的思路：任取两个类别$i$和$j$的输出概率$ q_i $和$ q_j $，令$ f(T)=|q_i - q_j| $，证明$ f(T) $在$ (0,+\infty) $上单调递减即可。</p>
 
   </div>
   
